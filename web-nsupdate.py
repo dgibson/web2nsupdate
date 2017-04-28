@@ -1,0 +1,154 @@
+#! /usr/bin/env python3
+
+import wsgiref
+import wsgiref.simple_server
+import cgi
+import html
+import re
+import string
+import ipaddress
+
+
+class Error(Exception):
+    pass
+
+
+def validate_unexpected_params(params):
+    for p in params.keys():
+        if p not in {'domain', 'user', 'password', 'ip4addr', 'ip6addr'}:
+            raise Error("Unexpected parameter '{}'".format(p))
+
+
+def exactly_one(name, params):
+    if name not in params:
+        raise Error("Missing parameter '{}'".format(name))
+    elif len(params[name]) != 1:
+        raise Error("Multiple '{}' parameters".format(name))
+    else:
+        return params[name][0]
+
+
+domain_re = re.compile('[a-z0-9-]+([.][a-z0-9-]+)*')
+user_re = re.compile('[a-z0-9_]+')
+
+
+def validate_domain(params):
+    domain = exactly_one('domain', params)
+    if not domain_re.fullmatch(domain):
+        raise Error("Invalid domain parameter")
+    return domain
+
+
+def validate_user(params):
+    user = exactly_one('user', params)
+    if not user_re.fullmatch(user):
+        raise Error("Invalid user name")
+    return user
+
+
+def validate_password(params):
+    password = exactly_one('password', params)
+    if any(c not in string.printable for c in password):
+        raise Error("Invalid characters in password")
+    return password
+
+
+def at_most_one(name, params):
+    if name not in params:
+        return None
+    elif len(params[name]) != 1:
+        raise Error("Multiple '{}' parameters".format(name))
+    else:
+        return params[name][0]
+
+
+def validate_ip4addr(params):
+    ip4addr = at_most_one('ip4addr', params)
+    try:
+        if ip4addr is not None:
+            ip4addr = ipaddress.IPv4Address(ip4addr)
+    except ipaddress.AddressValueError:
+        raise Error("Invalid IPv4 address")
+    return ip4addr
+
+
+def validate_ip6addr(params):
+    ip6addr = at_most_one('ip6addr', params)
+    try:
+        if ip6addr is not None:
+            ip6addr = ipaddress.IPv6Address(ip6addr)
+    except ipaddress.AddressValueError:
+        raise Error("Invalid IPv6 address")
+    return ip6addr
+
+
+class WebNSUpdateGateway(object):
+    def __init__(self, *, logfile, debug=False):
+        self.logfile = logfile
+        self.debug = debug
+
+    def log(self, fmt, *args, **kwargs):
+        self.logfile.write(fmt.format(*args, **kwargs) + "\n")
+
+    def debuglog(self, fmt, *args, **kwargs):
+        if self.debug:
+            self.log("DEBUG: " + fmt, *args, **kwargs)
+
+    def respond(self, start_response, status, body):
+        body = bytes(body, 'UTF-8')
+        hdrs = [
+            ('Content-Type', 'text/html'),
+            ('Content-Length', str(len(body)))
+        ]
+        start_response(status, hdrs)
+        return [body]
+        
+    def error(self, start_response, status, msg):
+        self.log("ERROR: {} - {}", status, msg)
+        body = """<html>
+<title>Error {}</title>
+<h1>Error {}</h1>
+See log for details.
+</html>""".format(html.escape(status), html.escape(status))
+        return self.respond(start_response, status, body)
+
+    def __call__(self, environ, start_response):
+        params = cgi.parse_qs(environ['QUERY_STRING'])
+
+        self.debuglog("Raw parameters: {}", params)
+
+        # Basic parameter validation
+        # This only checks things without reference to the configuration
+        try:
+            validate_unexpected_params(params)
+
+            domain = validate_domain(params)
+            user = validate_user(params)
+            password = validate_password(params)
+
+            ip4addr = validate_ip4addr(params)
+            ip6addr = validate_ip6addr(params)
+
+        except Error as e:
+            return self.error(start_response, "400 Bad Request", str(e))
+
+        self.debuglog("Parsed request: user={} domain={} A={}  AAAA={}",
+                      user, domain, ip4addr, ip6addr)
+        body="""<html>
+<title>Success</title>
+<h1>Success</h1>
+Done
+</html>""".format()
+        return self.respond(start_response, "200 OK", body)
+
+
+if __name__ == '__main__':
+    import sys
+
+    host = 'localhost'
+    port = 8927
+
+    application = WebNSUpdateGateway(logfile=sys.stderr, debug=True)
+    httpd = wsgiref.simple_server.make_server(host, port, application)
+    print("Listening on {}:{}".format(host, port))
+    httpd.handle_request()
