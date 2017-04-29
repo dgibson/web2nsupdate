@@ -113,11 +113,15 @@ def validate_keyfile(keyfile):
 
 
 class WebNSUpdateGateway(object):
-    def __init__(self, *, logfile, debug=False, gpg_cmd="gpg2", gpg_timeout=1):
+    def __init__(self, *, logfile, debug=False,
+                 gpg_cmd="gpg2", nsupdate_cmd="nsupdate",
+                 gpg_timeout=1, nsupdate_timeout=5):
         self.logfile = logfile
         self.debug = debug
         self.gpg_cmd = gpg_cmd
+        self.nsupdate_cmd = nsupdate_cmd
         self.gpg_timeout = gpg_timeout
+        self.nsupdate_timeout = nsupdate_timeout
 
     def log(self, fmt, *args, **kwargs):
         self.logfile.write(fmt.format(*args, **kwargs) + "\n")
@@ -181,6 +185,28 @@ See log for details.
         except ValueError as e:
             raise Error("Bad encoding in keyfile: {}".format(e))
 
+    def nsupdate(self, hmacname, secret, domain, ttl, ip4addr, ip6addr):
+        cmdseq = "key {} {}\n".format(hmacname, secret)
+        cmdseq += "update delete {} A\n".format(domain)
+        cmdseq += "update delete {} AAAA\n".format(domain)
+        if ip4addr is not None:
+            cmdseq += "update add {} {} A {}\n".format(domain, ttl, ip4addr)
+        if ip6addr is not None:
+            cmdseq += "update add {} {} AAAA {}\n".format(domain, ttl, ip6addr)
+        cmdseq += "send\n"
+
+        cmdseq = bytes(cmdseq, 'utf-8')
+
+        self.debuglog("nsupdate commands: {}", repr(cmdseq))
+
+        args = [self.nsupdate_cmd]
+        result = subprocess.run(args, input=cmdseq,
+                                stderr=subprocess.PIPE,
+                                timeout=self.nsupdate_timeout)
+        if result.returncode != 0:
+            msg = "nsupdate failed: {}".format(result.stderr)
+            raise Error(msg)
+
     def __call__(self, environ, start_response):
         params = cgi.parse_qs(environ['QUERY_STRING'])
 
@@ -212,6 +238,11 @@ See log for details.
             return self.error(start_response, "403 Forbidden", str(e))
 
         self.debuglog("Parsed keyfile: {}  TTL={}", hmacname, ttl)
+
+        try:
+            self.nsupdate(hmacname, secret, domain, ttl, ip4addr, ip6addr)
+        except Error as e:
+            return self.error(start_response, "403 Forbidden", str(e))
 
         body = """<html>
 <title>Success</title>
