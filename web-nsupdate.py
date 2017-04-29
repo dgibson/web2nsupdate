@@ -16,10 +16,9 @@ import base64
 
 domain_re = re.compile(r'[a-z0-9-]+([.][a-z0-9-]+)*')
 user_re = re.compile(r'[a-z0-9_]+')
-hmac_re = re.compile(r'[a-zA-Z0-9-]+')
-keyname_re = re.compile(r'[a-zA-Z0-9.]+')
+hmacname_re = re.compile(r'[a-zA-Z0-9-]+:[a-zA-Z0-9.]+')
 secret_re = re.compile(r'[a-zA-Z0-9+/=]+')
-
+ttl_re = re.compile(r'[0-9]+')
 
 class Error(Exception):
     pass
@@ -94,21 +93,23 @@ def validate_keyfile(keyfile):
     l = keyfile.split()
     if len(l) != 3:
         raise Error("Badly formatted keyfile")
-    hmac, keyname, secret = l
+    hmacname, secret, ttl = l
 
-    if not hmac_re.fullmatch(hmac):
-        raise Error("Bad characters in algorithm")
-    if not keyname_re.fullmatch(keyname):
-        raise Error("Bad characters in keyname")
+    if not hmacname_re.fullmatch(hmacname):
+        raise Error("Badly formatted algorithm/key name")
     if not secret_re.fullmatch(secret):
-        raise Error("Bad characters in secret")
+        raise Error("Badly formatted secret")
+    if not ttl_re.fullmatch(ttl):
+        raise Error("Badly formatted TTL")
 
     try:
         base64.b64decode(secret, validate=True)
-    except binascii.Error:
-        raise Error("Secret is not valid base64")
+    except binascii.Error as e:
+        raise Error("Secret is not base64: {}".format(e))
 
-    return hmac, keyname, secret
+    ttl = int(ttl, 10)
+
+    return hmacname, secret, ttl
 
 
 class WebNSUpdateGateway(object):
@@ -206,11 +207,11 @@ See log for details.
         # Check against configuration
         try:
             keyfile = self.read_keyfile(user, domain, password)
-            hmac, keyname, secret = validate_keyfile(keyfile)
+            hmacname, secret, ttl = validate_keyfile(keyfile)
         except Error as e:
             return self.error(start_response, "403 Forbidden", str(e))
 
-        self.debuglog("Parsed keyfile: hmac={} keyname={}", hmac, keyname)
+        self.debuglog("Parsed keyfile: {}  TTL={}", hmacname, ttl)
 
         body = """<html>
 <title>Success</title>
