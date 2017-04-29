@@ -10,10 +10,15 @@ import ipaddress
 import os
 import os.path
 import subprocess
+import binascii
+import base64
 
 
-domain_re = re.compile('[a-z0-9-]+([.][a-z0-9-]+)*')
-user_re = re.compile('[a-z0-9_]+')
+domain_re = re.compile(r'[a-z0-9-]+([.][a-z0-9-]+)*')
+user_re = re.compile(r'[a-z0-9_]+')
+hmac_re = re.compile(rb'[a-zA-Z0-9-]+')
+keyname_re = re.compile(rb'[a-zA-Z0-9.]+')
+secret_re = re.compile(rb'[a-zA-Z0-9+/=]+')
 
 
 class Error(Exception):
@@ -83,6 +88,27 @@ def validate_ip6addr(params):
     except ipaddress.AddressValueError:
         raise Error("Invalid IPv6 address")
     return ip6addr
+
+
+def validate_keyfile(keyfile):
+    l = keyfile.split()
+    if len(l) != 3:
+        raise Error("Badly formatted keyfile")
+    hmac, keyname, secret = l
+
+    if not hmac_re.fullmatch(hmac):
+        raise Error("Bad characters in algorithm")
+    if not keyname_re.fullmatch(keyname):
+        raise Error("Bad characters in keyname")
+    if not secret_re.fullmatch(secret):
+        raise Error("Bad characters in secret")
+
+    try:
+        base64.b64decode(secret, validate=True)
+    except binascii.Error:
+        raise Error("Secret is not valid base64")
+
+    return hmac, keyname, secret
 
 
 class WebNSUpdateGateway(object):
@@ -177,10 +203,11 @@ See log for details.
         # Check against configuration
         try:
             keyfile = self.read_keyfile(user, domain, password)
+            hmac, keyname, secret = validate_keyfile(keyfile)
         except Error as e:
             return self.error(start_response, "403 Forbidden", str(e))
 
-        self.debuglog("Keyfile: {}", repr(keyfile))
+        self.debuglog("Parsed keyfile: hmac={} keyname={}", hmac, keyname)
 
         body = """<html>
 <title>Success</title>
