@@ -16,9 +16,9 @@ import base64
 
 domain_re = re.compile(r'[a-z0-9-]+([.][a-z0-9-]+)*')
 user_re = re.compile(r'[a-z0-9_]+')
-hmac_re = re.compile(rb'[a-zA-Z0-9-]+')
-keyname_re = re.compile(rb'[a-zA-Z0-9.]+')
-secret_re = re.compile(rb'[a-zA-Z0-9+/=]+')
+hmac_re = re.compile(r'[a-zA-Z0-9-]+')
+keyname_re = re.compile(r'[a-zA-Z0-9.]+')
+secret_re = re.compile(r'[a-zA-Z0-9+/=]+')
 
 
 class Error(Exception):
@@ -175,7 +175,10 @@ See log for details.
                                                     result.stderr)
             raise Error(msg)
 
-        return result.stdout
+        try:
+            return str(result.stdout, encoding='utf-8', errors='strict')
+        except ValueError as e:
+            raise Error("Bad encoding in keyfile: {}".format(e))
 
     def __call__(self, environ, start_response):
         params = cgi.parse_qs(environ['QUERY_STRING'])
