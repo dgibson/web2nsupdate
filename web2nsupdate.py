@@ -112,7 +112,7 @@ def validate_keyfile(keyfile):
     return hmacname, secret, ttl
 
 
-class WebNSUpdateGateway(object):
+class Web2NSUpdate(object):
     def __init__(self, *, logfile, debug=False,
                  gpg_cmd="gpg2", nsupdate_cmd="nsupdate",
                  gpg_timeout=1, nsupdate_timeout=5):
@@ -149,7 +149,7 @@ See log for details.
         return self.respond(start_response, status, body)
 
     def read_keyfile(self, user, domain, password):
-        path = "~{}/.web-nsupdate/{}.gpg".format(user, domain)
+        path = "~{}/.web2nsupdate/{}.gpg".format(user, domain)
         path = os.path.expanduser(path)
 
         self.debuglog("Looking for keyfile at: {}", path)
@@ -258,7 +258,7 @@ if __name__ == '__main__':
     host = 'localhost'
     port = 8927
 
-    application = WebNSUpdateGateway(logfile=sys.stderr, debug=True)
+    application = Web2NSUpdate(logfile=sys.stderr, debug=True)
     httpd = wsgiref.simple_server.make_server(host, port, application)
     print("Listening on {}:{}".format(host, port))
     httpd.handle_request()
