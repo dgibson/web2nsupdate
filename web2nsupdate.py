@@ -36,6 +36,7 @@ hmacname_re = re.compile(r'[a-zA-Z0-9-]+:[a-zA-Z0-9.]+')
 secret_re = re.compile(r'[a-zA-Z0-9+/=]+')
 ttl_re = re.compile(r'[0-9]+')
 
+
 class Error(Exception):
     pass
 
@@ -130,13 +131,13 @@ def validate_keyfile(keyfile):
 
 class Web2NSUpdate(object):
     def __init__(self, *, logfile, debug=False,
-                 gpg_cmd="gpg2", nsupdate_cmd="nsupdate",
-                 gpg_timeout=1, nsupdate_timeout=5):
+                 openssl_cmd="openssl", nsupdate_cmd="nsupdate",
+                 openssl_timeout=1, nsupdate_timeout=5):
         self.logfile = logfile
         self.debug = debug
-        self.gpg_cmd = gpg_cmd
+        self.openssl_cmd = openssl_cmd
         self.nsupdate_cmd = nsupdate_cmd
-        self.gpg_timeout = gpg_timeout
+        self.openssl_timeout = openssl_timeout
         self.nsupdate_timeout = nsupdate_timeout
 
     def log(self, fmt, *args, **kwargs):
@@ -165,35 +166,35 @@ See log for details.
         return self.respond(start_response, status, body)
 
     def read_keyfile(self, user, domain, password):
-        path = "~{}/.web2nsupdate/{}.gpg".format(user, domain)
+        path = "~{}/.web2nsupdate/{}".format(user, domain)
         path = os.path.expanduser(path)
 
         self.debuglog("Looking for keyfile at: {}", path)
 
-        # These aren't significant from a security point of view (gpg
-        # will fail if it can't read the file).  They just make for
-        # clearer error messages in likely failure modes.
+        # These aren't significant from a security point of view
+        # (openssl will fail if it can't read the file).  They just
+        # make for clearer error messages in likely failure modes.
         if not os.access(path, os.F_OK):
             raise Error("Unknown domain {} for user {}".format(domain, user))
         elif not os.access(path, os.R_OK):
             raise Error("No read permission to keyfile {}".format(path))
 
-        args = [self.gpg_cmd, "--batch", "--passphrase-fd", "0",
-                "--decrypt", path]
-        self.debuglog("GPG arguments: {}", args)
+        args = [self.openssl_cmd, "enc", "-aes256", "-d", "-salt",
+                "-in", path, "-pass", "stdin"]
+        self.debuglog("openssl arguments: {}", args)
 
         try:
             result = subprocess.run(args, input=password,
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE,
-                                    timeout=self.gpg_timeout)
+                                    timeout=self.openssl_timeout)
         except subprocess.TimeoutExpired:
-            msg = "gpg timed out after {} seconds".format(self.gpg_timeout)
+            msg = "openssl timed out after {} seconds".format(self.openssl_timeout)
             raise Error(msg)
 
         if result.returncode != 0:
-            msg = "gpg returned code {}: {}".format(result.returncode,
-                                                    result.stderr)
+            msg = "openssl returned code {}: {}".format(result.returncode,
+                                                        result.stderr)
             raise Error(msg)
 
         try:
