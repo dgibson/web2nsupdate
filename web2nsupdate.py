@@ -30,11 +30,16 @@ import binascii
 import base64
 
 
-domain_re = re.compile(r'[a-z0-9-]+([.][a-z0-9-]+)*')
-user_re = re.compile(r'[a-z0-9_]+')
-hmacname_re = re.compile(r'[a-zA-Z0-9-]+:[a-zA-Z0-9.]+')
-secret_re = re.compile(r'[a-zA-Z0-9+/=]+')
-ttl_re = re.compile(r'[0-9]+')
+domain_re = r'[a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*'
+user_re = r'[a-zA-Z0-9_-]+'
+hmacname_re = r'[a-zA-Z0-9-]+:' + domain_re
+secret_re = r'[a-zA-Z0-9+/=]+'
+
+
+domain_re = re.compile(domain_re)
+user_re = re.compile(user_re)
+hmacname_re = re.compile(hmacname_re)
+secret_re = re.compile(secret_re)
 
 
 class Error(Exception):
@@ -116,15 +121,16 @@ def validate_keyfile(keyfile):
         raise Error("Badly formatted algorithm/key name")
     if not secret_re.fullmatch(secret):
         raise Error("Badly formatted secret")
-    if not ttl_re.fullmatch(ttl):
-        raise Error("Badly formatted TTL")
 
     try:
         base64.b64decode(secret, validate=True)
     except binascii.Error as e:
         raise Error("Secret is not base64: {}".format(e))
 
-    ttl = int(ttl, 10)
+    try:
+        ttl = int(ttl, 10)
+    except ValueError:
+        raise Error("Badly formatted TTL")
 
     return hmacname, secret, ttl
 
