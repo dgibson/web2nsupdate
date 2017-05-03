@@ -94,7 +94,9 @@ def at_most_one(name, params):
 def validate_ip4addr(params):
     ip4addr = at_most_one('ip4addr', params)
     try:
-        if ip4addr is not None:
+        if ip4addr == "":
+            return False
+        elif ip4addr is not None:
             ip4addr = ipaddress.IPv4Address(ip4addr)
     except ipaddress.AddressValueError:
         raise Error("Invalid IPv4 address")
@@ -104,7 +106,9 @@ def validate_ip4addr(params):
 def validate_ip6addr(params):
     ip6addr = at_most_one('ip6addr', params)
     try:
-        if ip6addr is not None:
+        if ip6addr == "":
+            return False
+        elif ip6addr is not None:
             ip6addr = ipaddress.IPv6Address(ip6addr)
     except ipaddress.AddressValueError:
         raise Error("Invalid IPv6 address")
@@ -210,12 +214,17 @@ See log for details.
 
     def nsupdate(self, hmacname, secret, domain, ttl, ip4addr, ip6addr):
         cmdseq = "key {} {}\n".format(hmacname, secret)
-        cmdseq += "update delete {} A\n".format(domain)
-        cmdseq += "update delete {} AAAA\n".format(domain)
+
         if ip4addr is not None:
-            cmdseq += "update add {} {} A {}\n".format(domain, ttl, ip4addr)
+            cmdseq += "update delete {} A\n".format(domain)
+            if ip4addr:
+                cmdseq += "update add {} {} A {}\n".format(domain, ttl, ip4addr)
+
         if ip6addr is not None:
-            cmdseq += "update add {} {} AAAA {}\n".format(domain, ttl, ip6addr)
+            cmdseq += "update delete {} AAAA\n".format(domain)
+            if ip6addr:
+                cmdseq += "update add {} {} AAAA {}\n".format(domain, ttl, ip6addr)
+
         cmdseq += "send\n"
 
         cmdseq = bytes(cmdseq, 'utf-8')
@@ -236,7 +245,7 @@ See log for details.
             raise Error(msg)
 
     def __call__(self, environ, start_response):
-        params = cgi.parse_qs(environ['QUERY_STRING'])
+        params = cgi.parse_qs(environ['QUERY_STRING'], keep_blank_values=True)
 
         self.debuglog("Raw parameters: {}", params)
 
