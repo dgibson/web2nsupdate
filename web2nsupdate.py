@@ -223,9 +223,14 @@ See log for details.
         self.debuglog("nsupdate commands: {}", repr(cmdseq))
 
         args = [self.nsupdate_cmd]
-        result = subprocess.run(args, input=cmdseq,
-                                stderr=subprocess.PIPE,
-                                timeout=self.nsupdate_timeout)
+        try:
+            result = subprocess.run(args, input=cmdseq,
+                                    stderr=subprocess.PIPE,
+                                    timeout=self.nsupdate_timeout)
+        except subprocess.TimeoutExpired:
+            msg = "nsupdate timed out after {} seconds".format(self.nsupdate_timeout)
+            raise Error(msg)
+
         if result.returncode != 0:
             msg = "nsupdate failed: {}".format(result.stderr)
             raise Error(msg)
