@@ -18,7 +18,7 @@
 
 import wsgiref
 import wsgiref.simple_server
-import cgi
+import urllib.parse
 import html
 import re
 import string
@@ -245,7 +245,8 @@ See log for details.
             raise Error(msg)
 
     def __call__(self, environ, start_response):
-        params = cgi.parse_qs(environ['QUERY_STRING'], keep_blank_values=True)
+        params = urllib.parse.parse_qs(environ['QUERY_STRING'],
+                                       keep_blank_values=True)
 
         self.debuglog("Raw parameters: {}", params)
 
