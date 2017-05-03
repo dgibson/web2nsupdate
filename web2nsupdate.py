@@ -282,6 +282,13 @@ See log for details.
         except Error as e:
             return self.error(start_response, "403 Forbidden", str(e))
 
+        msg = ""
+        if ip4addr is not None:
+            msg += " A {}".format(ip4addr or "<deleted>")
+        if ip6addr is not None:
+            msg += " AAAA {}".format(ip6addr or "<deleted>")
+        self.log("web2nsupdate updated {} for {}:{}", domain, user, msg)
+
         body = """<html>
 <title>Success</title>
 <h1>Success</h1>
