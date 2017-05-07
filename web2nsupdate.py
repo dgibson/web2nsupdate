@@ -30,16 +30,11 @@ import binascii
 import base64
 
 
-domain_re = r'[a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*'
-user_re = r'[a-zA-Z0-9_-]+'
-hmacname_re = r'[a-zA-Z0-9-]+:' + domain_re
-secret_re = r'[a-zA-Z0-9+/=]+'
-
-
-domain_re = re.compile(domain_re)
-user_re = re.compile(user_re)
-hmacname_re = re.compile(hmacname_re)
-secret_re = re.compile(secret_re)
+domain_re = re.compile(r'[a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*')
+user_re = re.compile(r'[a-zA-Z0-9_-]+')
+algo_re = re.compile(r'[a-zA-Z0-9-]+')
+keyname_re = domain_re
+secret_re = re.compile(r'[a-zA-Z0-9+/=]+')
 
 
 class Error(Exception):
@@ -115,28 +110,47 @@ def validate_ip6addr(params):
     return ip6addr
 
 
-def validate_keyfile(keyfile):
-    l = keyfile.split()
-    if len(l) != 3:
-        raise Error("Badly formatted keyfile")
-    hmacname, secret, ttl = l
+def validate_algo(algo):
+    if not algo_re.fullmatch(algo):
+        raise Error("Badly formatted algorithm '{}'".format(algo))
+    return algo
 
-    if not hmacname_re.fullmatch(hmacname):
-        raise Error("Badly formatted algorithm/key name")
+
+def validate_keyname(keyname):
+    if not keyname_re.fullmatch(keyname):
+        raise Error("Invalid key name '{}'".format(keyname))
+    return keyname
+
+
+def validate_secret(secret):
     if not secret_re.fullmatch(secret):
-        raise Error("Badly formatted secret")
-
+        raise Error("Bad characters in secret")
     try:
         base64.b64decode(secret, validate=True)
     except binascii.Error as e:
         raise Error("Secret is not base64: {}".format(e))
+    return secret
 
+
+def validate_ttl(ttl):
     try:
-        ttl = int(ttl, 10)
+        return int(ttl, 10)
     except ValueError:
-        raise Error("Badly formatted TTL")
+        raise Error("Badly formatted TTL: '{}'".format(ttl))
 
-    return hmacname, secret, ttl
+
+def parse_keyfile(keyfile):
+    l = keyfile.split()
+    if len(l) != 3:
+        raise Error("Badly formatted keyfile")
+    hmacname, secret, ttl = l
+    l = hmacname.split(':')
+    if len(l) != 2:
+        raise Error("Badly formatted keyfile")
+    algo, keyname = l
+
+    return (validate_algo(algo), validate_keyname(keyname),
+            validate_secret(secret), validate_ttl(ttl))
 
 
 class Web2NSUpdate(object):
@@ -212,8 +226,8 @@ See log for details.
         except ValueError as e:
             raise Error("Bad encoding in keyfile: {}".format(e))
 
-    def nsupdate(self, hmacname, secret, domain, ttl, ip4addr, ip6addr):
-        cmdseq = "key {} {}\n".format(hmacname, secret)
+    def nsupdate(self, algo, keyname, secret, domain, ttl, ip4addr, ip6addr):
+        cmdseq = "key {}:{} {}\n".format(algo, keyname, secret)
 
         if ip4addr is not None:
             cmdseq += "update delete {} A\n".format(domain)
@@ -271,14 +285,14 @@ See log for details.
         # Check against configuration
         try:
             keyfile = self.read_keyfile(user, domain, password)
-            hmacname, secret, ttl = validate_keyfile(keyfile)
+            algo, keyname, secret, ttl = parse_keyfile(keyfile)
         except Error as e:
             return self.error(start_response, "403 Forbidden", str(e))
 
-        self.debuglog("Parsed keyfile: {}  TTL={}", hmacname, ttl)
+        self.debuglog("Parsed keyfile: {}:{}  TTL={}", algo, keyname, ttl)
 
         try:
-            self.nsupdate(hmacname, secret, domain, ttl, ip4addr, ip6addr)
+            self.nsupdate(algo, keyname, secret, domain, ttl, ip4addr, ip6addr)
         except Error as e:
             return self.error(start_response, "403 Forbidden", str(e))
 
