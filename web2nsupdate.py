@@ -139,14 +139,14 @@ def validate_ttl(ttl):
         raise Error("Badly formatted TTL: '{}'".format(ttl))
 
 
-def parse_keyfile(keyfile):
-    l = keyfile.split()
+def parse_configdata(configdata):
+    l = configdata.split()
     if len(l) != 3:
-        raise Error("Badly formatted keyfile")
+        raise Error("Badly formatted configdata")
     hmacname, secret, ttl = l
     l = hmacname.split(':')
     if len(l) != 2:
-        raise Error("Badly formatted keyfile")
+        raise Error("Badly formatted configdata")
     algo, keyname = l
 
     return (validate_algo(algo), validate_keyname(keyname),
@@ -189,11 +189,11 @@ See log for details.
 </html>""".format(html.escape(status), html.escape(status))
         return self.respond(start_response, status, body)
 
-    def read_keyfile(self, user, domain, password):
+    def read_configdata(self, user, domain, password):
         path = "~{}/.web2nsupdate/{}".format(user, domain)
         path = os.path.expanduser(path)
 
-        self.debuglog("Looking for keyfile at: {}", path)
+        self.debuglog("Looking for configdata at: {}", path)
 
         # These aren't significant from a security point of view
         # (openssl will fail if it can't read the file).  They just
@@ -201,7 +201,7 @@ See log for details.
         if not os.access(path, os.F_OK):
             raise Error("Unknown domain {} for user {}".format(domain, user))
         elif not os.access(path, os.R_OK):
-            raise Error("No read permission to keyfile {}".format(path))
+            raise Error("No read permission to configdata {}".format(path))
 
         args = [self.openssl_cmd, "enc", "-aes256", "-d", "-salt",
                 "-in", path, "-pass", "stdin"]
@@ -224,7 +224,7 @@ See log for details.
         try:
             return str(result.stdout, encoding='utf-8', errors='strict')
         except ValueError as e:
-            raise Error("Bad encoding in keyfile: {}".format(e))
+            raise Error("Bad encoding in configdata: {}".format(e))
 
     def nsupdate(self, algo, keyname, secret, domain, ttl, ip4addr, ip6addr):
         cmdseq = "key {}:{} {}\n".format(algo, keyname, secret)
@@ -284,12 +284,12 @@ See log for details.
 
         # Check against configuration
         try:
-            keyfile = self.read_keyfile(user, domain, password)
-            algo, keyname, secret, ttl = parse_keyfile(keyfile)
+            configdata = self.read_configdata(user, domain, password)
+            algo, keyname, secret, ttl = parse_configdata(configdata)
         except Error as e:
             return self.error(start_response, "403 Forbidden", str(e))
 
-        self.debuglog("Parsed keyfile: {}:{}  TTL={}", algo, keyname, ttl)
+        self.debuglog("Parsed configdata: {}:{}  TTL={}", algo, keyname, ttl)
 
         try:
             self.nsupdate(algo, keyname, secret, domain, ttl, ip4addr, ip6addr)
