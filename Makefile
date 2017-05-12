@@ -7,3 +7,4 @@ check:
 
 clean:
 	rm -f *~ *.pyc *.pyo
+	rm -fr __pycache__
