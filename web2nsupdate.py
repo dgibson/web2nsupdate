@@ -284,6 +284,15 @@ See log for details.
         self.debuglog("Parsed request: user={} domain={} A={}  AAAA={}",
                       user, domain, ip4addr, ip6addr)
 
+        # Early exit if no updates needed
+        if ip4addr is None and ip6addr is None:
+            body = """<html>
+<title>Success</title>
+<h1>Success</h1>
+No update needed
+</html>""".format()
+            return self.respond(start_response, "200 OK", body)
+
         # Check against configuration
         try:
             configdata = self.read_configdata(user, domain, password)
