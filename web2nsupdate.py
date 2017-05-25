@@ -86,12 +86,14 @@ def at_most_one(name, params):
         return params[name][0]
 
 
-def validate_ip4addr(params):
+def validate_ip4addr(params, remote_addr):
     ip4addr = at_most_one('ip4addr', params)
     try:
         if ip4addr == "":
             return False
         elif ip4addr is not None:
+            if ip4addr == "auto":
+                ip4addr = remote_addr
             ip4addr = ipaddress.IPv4Address(ip4addr)
     except ipaddress.AddressValueError:
         raise Error("Invalid IPv4 address")
@@ -273,7 +275,7 @@ See log for details.
             user = validate_user(params)
             password = validate_password(params)
 
-            ip4addr = validate_ip4addr(params)
+            ip4addr = validate_ip4addr(params, environ['REMOTE_ADDR'])
             ip6addr = validate_ip6addr(params)
 
         except Error as e:
