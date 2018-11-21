@@ -205,7 +205,7 @@ See log for details.
         elif not os.access(path, os.R_OK):
             raise Error("No read permission to configdata {}".format(path))
 
-        args = [self.openssl_cmd, "enc", "-aes256", "-d", "-salt",
+        args = [self.openssl_cmd, "enc", "-aes256", "-d", "-salt", "-pbkdf2",
                 "-in", path, "-pass", "stdin"]
         self.debuglog("openssl arguments: {}", args)
 

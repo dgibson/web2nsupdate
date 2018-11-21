@@ -63,7 +63,7 @@ def parse_keyfile(filename):
 
 
 def write_configdata(path, configdata):
-    args = [openssl_cmd, "enc", "-aes256", "-salt",
+    args = [openssl_cmd, "enc", "-aes256", "-salt", "-pbkdf2",
             "-out", path]
 
     data = bytes(configdata, 'UTF-8')
